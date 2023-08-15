@@ -635,7 +635,8 @@ class AfterDetailerScript(scripts.Script):
             for n, args in enumerate(arg_list):
                 if args.ad_model == "None":
                     continue
-                is_processed |= self._postprocess_image(p, pp, args, n=n)
+                is_processed |= True
+                # is_processed |= self._postprocess_image(p, pp, args, n=n)
 
         if is_processed:
             self.save_image(
