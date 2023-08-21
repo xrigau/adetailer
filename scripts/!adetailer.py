@@ -24,7 +24,7 @@ from adetailer import (
     mediapipe_predict,
     ultralytics_predict,
 )
-from adetailer.args import ALL_ARGS, BBOX_SORTBY, ADetailerArgs, EnableChecker
+from adetailer.args import ALL_ARGS, BBOX_SORTBY, ADetailerArgs, Arg, _all_args, EnableChecker
 from adetailer.common import PredictOutput
 from adetailer.mask import (
     filter_by_ratio,
@@ -50,6 +50,8 @@ from sd_webui.processing import (
 )
 from sd_webui.sd_samplers import all_samplers
 from sd_webui.shared import cmd_opts, opts, state
+
+from PIL import Image
 
 no_huggingface = getattr(cmd_opts, "ad_no_huggingface", False)
 adetailer_dir = Path(models_path, "adetailer")
@@ -178,11 +180,26 @@ class AfterDetailerScript(scripts.Script):
         checker = EnableChecker(enable=enable, arg_list=arg_list)
         return checker.is_enabled()
 
+    def update_arg(self, arg: dict) -> dict:        
+        if type(arg['ad_external_image']) == str:
+            # If it's already a string, it's been parsed already, we can skip this.
+            return arg
+        
+        if arg['ad_external_image'] is not None:
+            # The ad_external_image is a file object, we need to add the file name to the arg dict as a string.
+            arg['ad_external_image'] = arg['ad_external_image'].name
+        else:
+            arg['ad_external_image'] = 'None'
+        return arg
+
     def get_args(self, p, *args_) -> list[ADetailerArgs]:
         """
         `args_` is at least 1 in length by `is_ad_enabled` immediately above
+
+        Added: Parse the external image path and add it to the args as a string so that it can be serialized.
         """
         args = [arg for arg in args_ if isinstance(arg, dict)]
+        args = [self.update_arg(arg) for arg in args] # added
 
         if not args:
             message = f"[-] ADetailer: Invalid arguments passed to ADetailer: {args_!r}"
@@ -520,6 +537,16 @@ class AfterDetailerScript(scripts.Script):
         return i % bs == 0
 
     @rich_traceback
+    def before_process(self, p, *args):
+        # The easiest was to leave this as a script, but that means the image generation will still run.
+        # This method sets the values to the minimum steps, width, and height, and sets the sampler to UniPC for a super quick generation.
+        print(f"[-] ADetailer: before_process: {args}")
+        p.steps = 1
+        p.width = 64
+        p.height = 64
+        p.sampler_name = "UniPC"
+
+    @rich_traceback
     def process(self, p, *args_):
         if getattr(p, "_disable_adetailer", False):
             return
@@ -622,8 +649,20 @@ class AfterDetailerScript(scripts.Script):
             return
 
         p._ad_idx = getattr(p, "_ad_idx", -1) + 1
-        init_image = copy(pp.image)
         arg_list = self.get_args(p, *args_)
+
+        if (arg_list[0].ad_external_image == "None"):
+            print(f"[-] ADetailer: skipping image.")
+            return
+        else:
+            print(f"[-] ADetailer: processing image with external image: {arg_list[0].ad_external_image}")
+
+        img = Image.open(arg_list[0].ad_external_image)
+        print(f"[-] ADetailer: overriding postprocessing image: {img}")
+        pp.image = copy(img)
+        img.close()
+
+        init_image = copy(pp.image)
 
         if p.scripts is not None and self.need_call_postprocess(p):
             dummy = Processed(p, [], p.seed, "")
@@ -635,8 +674,7 @@ class AfterDetailerScript(scripts.Script):
             for n, args in enumerate(arg_list):
                 if args.ad_model == "None":
                     continue
-                is_processed |= True
-                # is_processed |= self._postprocess_image(p, pp, args, n=n)
+                is_processed |= self._postprocess_image(p, pp, args, n=n)
 
         if is_processed:
             self.save_image(

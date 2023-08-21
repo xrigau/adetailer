@@ -37,9 +37,11 @@ class ArgsList(UserList):
 
 
 class ADetailerArgs(BaseModel, extra=Extra.forbid):
+    ad_enable: bool = True
     ad_model: str = "None"
     ad_prompt: str = ""
     ad_negative_prompt: str = ""
+    ad_external_image: str = "None"
     ad_confidence: confloat(ge=0.0, le=1.0) = 0.3
     ad_mask_k_largest: NonNegativeInt = 0
     ad_mask_min_ratio: confloat(ge=0.0, le=1.0) = 0.0
@@ -52,15 +54,15 @@ class ADetailerArgs(BaseModel, extra=Extra.forbid):
     ad_denoising_strength: confloat(ge=0.0, le=1.0) = 0.4
     ad_inpaint_only_masked: bool = True
     ad_inpaint_only_masked_padding: NonNegativeInt = 32
-    ad_use_inpaint_width_height: bool = False
+    ad_use_inpaint_width_height: bool = True
     ad_inpaint_width: PositiveInt = 512
     ad_inpaint_height: PositiveInt = 512
-    ad_use_steps: bool = False
-    ad_steps: PositiveInt = 28
+    ad_use_steps: bool = True
+    ad_steps: PositiveInt = 50
     ad_use_cfg_scale: bool = False
     ad_cfg_scale: NonNegativeFloat = 7.0
-    ad_use_sampler: bool = False
-    ad_sampler: str = "DPM++ 2M Karras"
+    ad_use_sampler: bool = True
+    ad_sampler: str = "DPM++ SDE Karras"
     ad_use_noise_multiplier: bool = False
     ad_noise_multiplier: confloat(ge=0.5, le=1.5) = 1.0
     ad_use_clip_skip: bool = False
@@ -189,6 +191,7 @@ _all_args = [
     ("ad_model", "ADetailer model"),
     ("ad_prompt", "ADetailer prompt"),
     ("ad_negative_prompt", "ADetailer negative prompt"),
+    ("ad_external_image", "ADetailer exteral image"),
     ("ad_confidence", "ADetailer confidence"),
     ("ad_mask_k_largest", "ADetailer mask only top k largest"),
     ("ad_mask_min_ratio", "ADetailer mask min ratio"),

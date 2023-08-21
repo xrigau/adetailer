@@ -157,6 +157,14 @@ def one_ui_group(
                 + "\nIf blank, the main negative prompt is used.",
                 elem_id=eid("ad_negative_prompt"),
             )
+        
+        with gr.Row(elem_id=eid("ad_toprow_extimg_generate")):
+            w.ad_external_image = gr.File(
+                label="ad_external_image" + suffix(n),
+                type="file",
+                file_types = ["png", "jpg", "jpeg"],
+                elem_id=eid("ad_external_image"),
+            )
 
     with gr.Group():
         with gr.Accordion(
@@ -333,7 +341,7 @@ def inpainting(w: Widgets, n: int, is_img2img: bool, samplers: list[str]):
             with gr.Column(variant="compact"):
                 w.ad_use_inpaint_width_height = gr.Checkbox(
                     label="Use separate width/height" + suffix(n),
-                    value=False,
+                    value=True,
                     visible=True,
                     elem_id=eid("ad_use_inpaint_width_height"),
                 )
@@ -369,7 +377,7 @@ def inpainting(w: Widgets, n: int, is_img2img: bool, samplers: list[str]):
             with gr.Column(variant="compact"):
                 w.ad_use_steps = gr.Checkbox(
                     label="Use separate steps" + suffix(n),
-                    value=False,
+                    value=True,
                     visible=True,
                     elem_id=eid("ad_use_steps"),
                 )
@@ -379,7 +387,7 @@ def inpainting(w: Widgets, n: int, is_img2img: bool, samplers: list[str]):
                     minimum=1,
                     maximum=150,
                     step=1,
-                    value=28,
+                    value=50,
                     visible=True,
                     elem_id=eid("ad_steps"),
                 )
@@ -420,7 +428,7 @@ def inpainting(w: Widgets, n: int, is_img2img: bool, samplers: list[str]):
             with gr.Column(variant="compact"):
                 w.ad_use_sampler = gr.Checkbox(
                     label="Use separate sampler" + suffix(n),
-                    value=False,
+                    value=True,
                     visible=True,
                     elem_id=eid("ad_use_sampler"),
                 )
