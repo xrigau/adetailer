@@ -1,4 +1,4 @@
-# !After Detailer
+# !After Detailer - Fork
 
 !After Detailer is a extension for stable diffusion webui, similar to Detection Detailer, except it uses ultralytics instead of the mmdet.
 
