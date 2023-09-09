@@ -684,8 +684,8 @@ class AfterDetailerScript(scripts.Script):
                 exit(1)
             fps = int(cap.get(cv2.CAP_PROP_FPS))
             random_folder_name = "".join(random.choices(string.ascii_letters + string.digits, k=8))
-            if not os.path.exists(random_folder_name):
-                os.makedirs(random_folder_name)
+            os.makedirs(random_folder_name, exist_ok=True)
+            os.makedirs(os.path.join(random_folder_name, "output"), exist_ok=True)
 
             frame_count = 0
             images = []
