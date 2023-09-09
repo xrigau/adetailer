@@ -553,7 +553,7 @@ class AfterDetailerScript(scripts.Script):
         p.steps = 1
         p.width = 64
         p.height = 64
-        p.sampler_name = "DDIM"
+        p.sampler_name = "Euler"
 
     @rich_traceback
     def process(self, p, *args_):
