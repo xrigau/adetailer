@@ -165,6 +165,14 @@ def one_ui_group(
                 file_types = ["png", "jpg", "jpeg"],
                 elem_id=eid("ad_external_image"),
             )
+        
+        with gr.Row(elem_id=eid("ad_toprow_extvid_generate")):
+            w.ad_external_video = gr.File(
+                label="ad_external_video" + suffix(n),
+                type="file",
+                file_types = ["mp4", "mov", "avi"],
+                elem_id=eid("ad_external_video"),
+            )
 
     with gr.Group():
         with gr.Accordion(

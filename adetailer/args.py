@@ -42,6 +42,7 @@ class ADetailerArgs(BaseModel, extra=Extra.forbid):
     ad_prompt: str = ""
     ad_negative_prompt: str = ""
     ad_external_image: str = "None"
+    ad_external_video: str = "None"
     ad_confidence: confloat(ge=0.0, le=1.0) = 0.3
     ad_mask_k_largest: NonNegativeInt = 0
     ad_mask_min_ratio: confloat(ge=0.0, le=1.0) = 0.0
@@ -192,6 +193,7 @@ _all_args = [
     ("ad_prompt", "ADetailer prompt"),
     ("ad_negative_prompt", "ADetailer negative prompt"),
     ("ad_external_image", "ADetailer exteral image"),
+    ("ad_external_video", "ADetailer exteral video"),
     ("ad_confidence", "ADetailer confidence"),
     ("ad_mask_k_largest", "ADetailer mask only top k largest"),
     ("ad_mask_min_ratio", "ADetailer mask min ratio"),

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import platform
+import random
 import re
+import string
 import sys
 import traceback
 from contextlib import contextmanager
@@ -12,8 +14,10 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
+import cv2
 import gradio as gr
 import torch
+from PIL import Image
 from rich import print
 
 import modules
@@ -24,7 +28,14 @@ from adetailer import (
     mediapipe_predict,
     ultralytics_predict,
 )
-from adetailer.args import ALL_ARGS, BBOX_SORTBY, ADetailerArgs, Arg, _all_args, EnableChecker
+from adetailer.args import (
+    ALL_ARGS,
+    BBOX_SORTBY,
+    ADetailerArgs,
+    Arg,
+    EnableChecker,
+    _all_args,
+)
 from adetailer.common import PredictOutput
 from adetailer.mask import (
     filter_by_ratio,
@@ -35,10 +46,7 @@ from adetailer.mask import (
 from adetailer.traceback import rich_traceback
 from adetailer.ui import adui, ordinal, suffix
 from controlnet_ext import ControlNetExt, controlnet_exists, get_cn_models
-from controlnet_ext.restore import (
-    CNHijackRestore,
-    cn_allow_script_control,
-)
+from controlnet_ext.restore import CNHijackRestore, cn_allow_script_control
 from sd_webui import images, safe, script_callbacks, scripts, shared
 from sd_webui.devices import NansException
 from sd_webui.paths import data_path, models_path
@@ -51,13 +59,13 @@ from sd_webui.processing import (
 from sd_webui.sd_samplers import all_samplers
 from sd_webui.shared import cmd_opts, opts, state
 
-from PIL import Image
-
 no_huggingface = getattr(cmd_opts, "ad_no_huggingface", False)
 adetailer_dir = Path(models_path, "adetailer")
 model_mapping = get_models(adetailer_dir, huggingface=not no_huggingface)
 txt2img_submit_button = img2img_submit_button = None
-SCRIPT_DEFAULT = "dynamic_prompting,dynamic_thresholding,wildcard_recursive,wildcards,lora_block_weight"
+SCRIPT_DEFAULT = (
+    "dynamic_prompting,dynamic_thresholding,wildcard_recursive,wildcards,lora_block_weight"
+)
 
 if (
     not adetailer_dir.exists()
@@ -66,9 +74,7 @@ if (
 ):
     adetailer_dir.mkdir()
 
-print(
-    f"[-] ADetailer initialized. version: {__version__}, num models: {len(model_mapping)}"
-)
+print(f"[-] ADetailer initialized. version: {__version__}, num models: {len(model_mapping)}")
 
 
 @contextmanager
@@ -180,26 +186,37 @@ class AfterDetailerScript(scripts.Script):
         checker = EnableChecker(enable=enable, arg_list=arg_list)
         return checker.is_enabled()
 
-    def update_arg(self, arg: dict) -> dict:        
-        if type(arg['ad_external_image']) == str:
+    def update_arg(self, arg: dict) -> dict:
+        if type(arg["ad_external_image"]) == str:
             # If it's already a string, it's been parsed already, we can skip this.
             return arg
-        
-        if arg['ad_external_image'] is not None:
+
+        if type(arg["ad_external_video"]) == str:
+            # If it's already a string, it's been parsed already, we can skip this.
+            return arg
+
+        if arg["ad_external_image"] is not None:
             # The ad_external_image is a file object, we need to add the file name to the arg dict as a string.
-            arg['ad_external_image'] = arg['ad_external_image'].name
+            arg["ad_external_image"] = arg["ad_external_image"].name
         else:
-            arg['ad_external_image'] = 'None'
+            arg["ad_external_image"] = "None"
+
+        if arg["ad_external_video"] is not None:
+            # The ad_external_video is a file object, we need to add the file name to the arg dict as a string.
+            arg["ad_external_video"] = arg["ad_external_video"].name
+        else:
+            arg["ad_external_video"] = "None"
+
         return arg
 
     def get_args(self, p, *args_) -> list[ADetailerArgs]:
         """
         `args_` is at least 1 in length by `is_ad_enabled` immediately above
 
-        Added: Parse the external image path and add it to the args as a string so that it can be serialized.
+        Added: Parse the external image or video path and add it to the args as a string so that it can be serialized.
         """
         args = [arg for arg in args_ if isinstance(arg, dict)]
-        args = [self.update_arg(arg) for arg in args] # added
+        args = [self.update_arg(arg) for arg in args]  # added
 
         if not args:
             message = f"[-] ADetailer: Invalid arguments passed to ADetailer: {args_!r}"
@@ -248,9 +265,7 @@ class AfterDetailerScript(scripts.Script):
 
         return ""
 
-    def prompt_blank_replacement(
-        self, all_prompts: list[str], i: int, default: str
-    ) -> str:
+    def prompt_blank_replacement(self, all_prompts: list[str], i: int, default: str) -> str:
         if not all_prompts:
             return default
         if i < len(all_prompts):
@@ -341,9 +356,7 @@ class AfterDetailerScript(scripts.Script):
 
     @staticmethod
     def infotext(p) -> str:
-        return create_infotext(
-            p, p.all_prompts, p.all_seeds, p.all_subseeds, None, 0, 0
-        )
+        return create_infotext(p, p.all_prompts, p.all_seeds, p.all_subseeds, None, 0, 0)
 
     def write_params_txt(self, p) -> None:
         infotext = self.infotext(p)
@@ -482,9 +495,7 @@ class AfterDetailerScript(scripts.Script):
         return sort_bboxes(pred, sortby_idx)
 
     def pred_preprocessing(self, pred: PredictOutput, args: ADetailerArgs):
-        pred = filter_by_ratio(
-            pred, low=args.ad_mask_min_ratio, high=args.ad_mask_max_ratio
-        )
+        pred = filter_by_ratio(pred, low=args.ad_mask_min_ratio, high=args.ad_mask_max_ratio)
         pred = filter_k_largest(pred, k=args.ad_mask_k_largest)
         pred = self.sort_bboxes(pred)
         return mask_preprocess(
@@ -502,9 +513,7 @@ class AfterDetailerScript(scripts.Script):
         return image
 
     @staticmethod
-    def i2i_prompts_replace(
-        i2i, prompts: list[str], negative_prompts: list[str], j: int
-    ) -> None:
+    def i2i_prompts_replace(i2i, prompts: list[str], negative_prompts: list[str], j: int) -> None:
         i1 = min(j, len(prompts) - 1)
         i2 = min(j, len(negative_prompts) - 1)
         prompt = prompts[i1]
@@ -624,7 +633,9 @@ class AfterDetailerScript(scripts.Script):
             try:
                 processed = process_images(p2)
             except NansException as e:
-                msg = f"[-] ADetailer: 'NansException' occurred with {ordinal(n + 1)} settings.\n{e}"
+                msg = (
+                    f"[-] ADetailer: 'NansException' occurred with {ordinal(n + 1)} settings.\n{e}"
+                )
                 print(msg, file=sys.stderr)
                 continue
             finally:
@@ -651,47 +662,91 @@ class AfterDetailerScript(scripts.Script):
         p._ad_idx = getattr(p, "_ad_idx", -1) + 1
         arg_list = self.get_args(p, *args_)
 
-        if (arg_list[0].ad_external_image == "None"):
+        images = []
+        is_video = False
+        if arg_list[0].ad_external_image == "None" and arg_list[0].ad_external_video == "None":
             print(f"[-] ADetailer: skipping image.")
             return
-        else:
-            print(f"[-] ADetailer: processing image with external image: {arg_list[0].ad_external_image}")
+        elif arg_list[0].ad_external_image != "None":
+            print(
+                f"[-] ADetailer: processing image with external image: {arg_list[0].ad_external_image}"
+            )
+            images = [arg_list[0].ad_external_image]
+        elif arg_list[0].ad_external_video != "None":
+            print(
+                f"[-] ADetailer: processing video with external video: {arg_list[0].ad_external_video}"
+            )
+            video_path = arg_list[0].ad_external_video
+            cap = cv2.VideoCapture(video_path)
 
-        img = Image.open(arg_list[0].ad_external_image)
-        print(f"[-] ADetailer: overriding postprocessing image: {img}")
-        pp.image = copy(img)
-        img.close()
+            if not cap.isOpened():
+                print(f"[-] ADetailer: Failed to open video: {video_path}")
+                exit(1)
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            random_folder_name = "".join(random.choices(string.ascii_letters + string.digits, k=8))
+            if not os.path.exists(random_folder_name):
+                os.makedirs(random_folder_name)
 
-        init_image = copy(pp.image)
+            frame_count = 0
+            images = []
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                if frame_count % 2 == 0:  # Every 2 frames
+                    image_path = os.path.join(random_folder_name, f"frame_{frame_count}.jpg")
+                    cv2.imwrite(image_path, frame)
+                    images.append(image_path)
+                frame_count += 1
 
-        if p.scripts is not None and self.need_call_postprocess(p):
-            dummy = Processed(p, [], p.seed, "")
-            with preseve_prompts(p):
-                p.scripts.postprocess(copy(p), dummy)
-
-        is_processed = False
-        with CNHijackRestore(), pause_total_tqdm(), cn_allow_script_control():
-            for n, args in enumerate(arg_list):
-                if args.ad_model == "None":
-                    continue
-                is_processed |= self._postprocess_image(p, pp, args, n=n)
-
-        if is_processed:
-            self.save_image(
-                p, init_image, condition="ad_save_images_before", suffix="-ad-before"
+            # Close the video file
+            cap.release()
+            is_video = True
+            print(
+                f"[-] ADetailer: processed video with fps: {fps} and saved frames in {random_folder_name}"
             )
 
-        if p.scripts is not None and self.need_call_process(p):
-            with preseve_prompts(p):
-                p.scripts.process(copy(p))
+        image_number = 0
+        for image in images:
+            image_number = image_number + 1
+            img = Image.open(image)
+            print(f"[-] ADetailer: overriding postprocessing image: {img}")
+            pp.image = copy(img)
+            img.close()
 
-        try:
-            ia = p._ad_idx
-            lenp = len(p.all_prompts)
-            if ia % lenp == lenp - 1:
-                self.write_params_txt(p)
-        except Exception:
-            pass
+            init_image = copy(pp.image)
+
+            if p.scripts is not None and self.need_call_postprocess(p):
+                dummy = Processed(p, [], p.seed, "")
+                with preseve_prompts(p):
+                    p.scripts.postprocess(copy(p), dummy)
+
+            is_processed = False
+            with CNHijackRestore(), pause_total_tqdm(), cn_allow_script_control():
+                for n, args in enumerate(arg_list):
+                    if args.ad_model == "None":
+                        continue
+                    is_processed |= self._postprocess_image(p, pp, args, n=n)
+
+            if is_processed:
+                self.save_image(
+                    p,
+                    init_image,
+                    condition="ad_save_images_before",
+                    suffix=f"-ad-before-{image_number}",
+                )
+
+            if p.scripts is not None and self.need_call_process(p):
+                with preseve_prompts(p):
+                    p.scripts.process(copy(p))
+
+            try:
+                ia = p._ad_idx
+                lenp = len(p.all_prompts)
+                if ia % lenp == lenp - 1:
+                    self.write_params_txt(p)
+            except Exception:
+                pass
 
 
 def on_after_component(component, **_kwargs):
@@ -729,9 +784,7 @@ def on_ui_settings():
 
     shared.opts.add_option(
         "ad_only_seleted_scripts",
-        shared.OptionInfo(
-            True, "Apply only selected scripts to ADetailer", section=section
-        ),
+        shared.OptionInfo(True, "Apply only selected scripts to ADetailer", section=section),
     )
 
     textbox_args = {
