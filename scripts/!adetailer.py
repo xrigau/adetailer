@@ -749,8 +749,10 @@ class AfterDetailerScript(scripts.Script):
                 pass
 
             ## save init image to disk with image_number .png. It's PIL Image in folder 'random_folder_name'
-            p.image.save(os.path.join(random_folder_name, f"{image_number}.png"))
-            print(f"[-] ADetailer: saved image to {random_folder_name}")
+            p.image.save(os.path.join(random_folder_name, "output", f"{image_number}.png"))
+            print(
+                f"[-] ADetailer: saved image to {os.path.join(random_folder_name, 'output', f'{image_number}.png')}"
+            )
 
 
 def on_after_component(component, **_kwargs):
